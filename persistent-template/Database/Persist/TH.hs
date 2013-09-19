@@ -121,7 +121,7 @@ getSqlType allEntities ent =
 
         mEmbedded (FTTypeCon Just{} _) = Nothing
         mEmbedded (FTTypeCon Nothing n) = let name = HaskellName n in
-            find ((name ==) . entityHaskell) allEntities 
+            find ((name ==) . entityHaskell) allEntities
         mEmbedded (FTList x) = mEmbedded x
         mEmbedded (FTApp x y) = maybe (mEmbedded y) Just (mEmbedded x)
 
@@ -203,7 +203,7 @@ sqlOnlySettings :: MkPersistSettings
 sqlOnlySettings = sqlSettings { mpsGeneric = False }
 
 recName :: Text -> Text -> Text
-recName dt f = lowerFirst dt ++ upperFirst f
+recName _dt f = lowerFirst f
 
 lowerFirst :: Text -> Text
 lowerFirst t =
