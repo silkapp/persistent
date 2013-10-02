@@ -312,7 +312,7 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
             let new = first (filter $ not . safeToRemove val . cName)
                     $ second (map udToPair)
                     $ mkColumns allDefs val
-            if null old
+            r <- if null old
                 then do
                     let addTable = AddTable $ concat
                             -- Lower case e: see Database.Persistent.GenericSql.Migration
@@ -331,8 +331,11 @@ migrate' allDefs getter val = fmap (fmap $ map showAlterDb) $ do
                 else do
                     let (acs, ats) = getAlters val new old'
                     let acs' = map (AlterColumn name) acs
+                    print acs'
                     let ats' = map (AlterTable name) ats
+                    print ats'
                     return $ Right $ acs' ++ ats'
+            return r
         (errs, _) -> return $ Left errs
 
 type SafeToRemove = Bool
@@ -340,14 +343,18 @@ type SafeToRemove = Bool
 data AlterColumn = Type SqlType | IsNull | NotNull | Add' Column | Drop SafeToRemove
                  | Default String | NoDefault | Update' String
                  | AddReference DBName | DropReference DBName
+  deriving Show
+
 type AlterColumn' = (DBName, AlterColumn)
 
 data AlterTable = AddUniqueConstraint DBName [DBName]
                 | DropConstraint DBName
+  deriving Show
 
 data AlterDB = AddTable String
              | AlterColumn DBName AlterColumn'
              | AlterTable DBName AlterTable
+  deriving Show
 
 -- | Returns all of the columns in the given table currently in the database.
 getColumns :: (Text -> IO Statement)
@@ -361,7 +368,11 @@ getColumns getter def = do
             ]
     cs <- runResourceT $ stmtQuery stmt vals $$ helper
     stmt' <- getter
-        "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
+    -- Pick one of these lines.
+    -- orig:
+    --    "SELECT constraint_name, column_name FROM information_schema.constraint_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
+    -- new:
+        "SELECT constraint_name, column_name FROM information_schema.key_column_usage WHERE table_name=? AND column_name <> ? ORDER BY constraint_name, column_name"
     us <- runResourceT $ stmtQuery stmt' vals $$ helperU
     return $ cs ++ us
   where
@@ -411,6 +422,8 @@ getAlters def (c1, u1) (c2, u2) =
     getAltersU :: [(DBName, [DBName])]
                -> [(DBName, [DBName])]
                -> [AlterTable]
+    -- TODO: when should something be dropped here?
+    --getAltersU [] old = []
     getAltersU [] old = map DropConstraint $ filter (not . isManual) $ map fst old
     getAltersU ((name, cols):news) old =
         case lookup name old of
